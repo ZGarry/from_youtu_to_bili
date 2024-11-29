@@ -1,0 +1,6 @@
+yt-dlp>=2024.11.18
+openai-whisper
+bilibili-api-python
+pyyaml
+ffmpeg-python
+tqdm>=4.65.0 
