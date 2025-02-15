@@ -1,11 +1,12 @@
 import yt_dlp
 import os
-import re
+from pathlib import Path
 
 class YouTubeDownloader:
     def __init__(self):
         self.ydl_opts = {
-            'format': 'best',  # 下载最佳质量
+            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',  # 优先选择最佳mp4格式
+            'merge_output_format': 'mp4',  # 确保输出mp4格式
             'quiet': False,
             'no_warnings': False,
             'http_headers': {
@@ -16,6 +17,7 @@ class YouTubeDownloader:
     @staticmethod
     def _is_valid_url(url):
         """验证YouTube URL格式"""
+        import re
         return bool(re.match(r'(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/', url))
 
     def download(self, url, output_path='downloads'):
@@ -34,32 +36,40 @@ class YouTubeDownloader:
         # 创建输出目录
         os.makedirs(output_path, exist_ok=True)
         
-        # 更新下载配置
-        self.ydl_opts.update({
-            'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
-            'progress_hooks': [self._progress_hook]
-        })
-        
         try:
+            # 更新下载选项
+            self.ydl_opts.update({
+                'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
+                'progress_hooks': [self._progress_hook]
+            })
+            
             with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
                 # 获取视频信息
+                print("正在获取视频信息...")
                 info = ydl.extract_info(url, download=False)
-                video_title = info.get('title', 'Unknown Title')
-                print(f"准备下载: {video_title}")
+                video_title = info.get('title', 'video')
+                print(f"视频标题: {video_title}")
                 
-                # 开始下载
+                # 清理文件名中的非法字符
+                video_title = "".join(x for x in video_title if x.isalnum() or x in (' ', '-', '_'))
+                output_file = os.path.join(output_path, f"{video_title}.mp4")
+                
+                # 下载视频
+                print("开始下载视频...")
                 ydl.download([url])
                 
-                # 构建输出文件路径
-                output_file = os.path.join(output_path, f"{video_title}.mp4")
+                # 检查文件是否存在
                 if os.path.exists(output_file):
+                    print(f"下载完成: {output_file}")
                     return output_file
                 else:
-                    # 尝试查找其他可能的扩展名
-                    for ext in ['mkv', 'webm']:
-                        alt_file = os.path.join(output_path, f"{video_title}.{ext}")
-                        if os.path.exists(alt_file):
-                            return alt_file
+                    # 尝试查找其他可能的文件名
+                    files = os.listdir(output_path)
+                    for file in files:
+                        if file.startswith(video_title) and file.endswith('.mp4'):
+                            output_file = os.path.join(output_path, file)
+                            print(f"找到下载文件: {output_file}")
+                            return output_file
                             
                 raise Exception("下载完成但未找到输出文件")
                 
@@ -69,10 +79,14 @@ class YouTubeDownloader:
     def _progress_hook(self, d):
         """下载进度回调"""
         if d['status'] == 'downloading':
-            if d.get('_percent_str'):
-                print(f"\r下载进度: {d['_percent_str']}", end='', flush=True)
+            try:
+                percent = d.get('_percent_str', 'N/A')
+                speed = d.get('_speed_str', 'N/A')
+                print(f"\r下载进度: {percent} 速度: {speed}", end='', flush=True)
+            except:
+                print("\r正在下载...", end='', flush=True)
         elif d['status'] == 'finished':
-            print("\n文件下载完成，正在处理...")
+            print("\n下载完成，正在处理...")
 
 if __name__ == '__main__':
     # 测试下载功能
